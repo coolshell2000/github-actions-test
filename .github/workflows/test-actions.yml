@@ -1,0 +1,31 @@
+name: Test GitHub Actions
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.9
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        
+    - name: Run Python script
+      run: python test_script.py
+      
+    - name: Print environment info
+      run: |
+        echo "Current directory: $(pwd)"
+        ls -la
+        echo "Python version: $(python --version)"
+        echo "GitHub event: ${{ github.event_name }}"
+        echo "GitHub branch: ${{ github.ref }}"
