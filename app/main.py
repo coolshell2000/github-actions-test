@@ -29,7 +29,9 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ip_address TEXT NOT NULL,
                 timestamp TEXT NOT NULL,
-                user_agent TEXT
+                user_agent TEXT,
+                user_id INTEGER,
+                FOREIGN KEY (user_id) REFERENCES users (id)
             )
         ''')
         conn.commit()
@@ -37,13 +39,14 @@ def init_db():
 
 def save_visitor(ip_address, user_agent=None):
     """Save visitor information to the database."""
+    user_id = current_user.id if current_user.is_authenticated else None
     with db_lock:
         conn = sqlite3.connect('visitors.db')
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO visitors (ip_address, timestamp, user_agent)
-            VALUES (?, ?, ?)
-        ''', (ip_address, datetime.now().isoformat(), user_agent))
+            INSERT INTO visitors (ip_address, timestamp, user_agent, user_id)
+            VALUES (?, ?, ?, ?)
+        ''', (ip_address, datetime.now().isoformat(), user_agent, user_id))
         conn.commit()
         conn.close()
 
@@ -53,9 +56,10 @@ def get_visitors(limit=100):
         conn = sqlite3.connect('visitors.db')
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT ip_address, timestamp, user_agent
-            FROM visitors
-            ORDER BY timestamp DESC
+            SELECT v.ip_address, v.timestamp, v.user_agent, u.name
+            FROM visitors v
+            LEFT JOIN users u ON v.user_id = u.id
+            ORDER BY v.timestamp DESC
             LIMIT ?
         ''', (limit,))
         visitors = cursor.fetchall()
@@ -429,20 +433,14 @@ def visitor_history():
     '''
 
     for visitor in visitors:
-        ip, timestamp, user_agent = visitor
+        ip, timestamp, user_agent, username = visitor
         user_agent_display = user_agent if user_agent else "N/A"
-
-        # Try to find user associated with this IP
-        username = "访客"
-        # In a real scenario, we would need to store user_id with each visit
-        # For now, we'll just show current user if they're viewing their own history
-        if current_user.is_authenticated:
-            username = current_user.name
+        username_display = username if username else "访客"
 
         html += f'''
             <tr>
                 <td>{ip}</td>
-                <td>{username}</td>
+                <td>{username_display}</td>
                 <td>{timestamp}</td>
                 <td>{user_agent_display}</td>
             </tr>
