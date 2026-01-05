@@ -1,17 +1,20 @@
 import os
 import logging
 from datetime import datetime
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, redirect, render_template
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from authlib.integrations.flask_client import OAuth
 from werkzeug.exceptions import HTTPException
 import sqlite3
 import threading
+import requests
 
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='../templates')
 
 # Thread lock for database access
 db_lock = threading.Lock()
@@ -61,6 +64,53 @@ def get_visitors(limit=100):
 
 # Initialize database on startup
 init_db()
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# Initialize OAuth
+oauth = OAuth(app)
+
+from auth import User, init_users_table, get_user, create_user, get_user_by_provider
+from config import SECRET_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_DISCOVERY_URL, WECHAT_CLIENT_ID, WECHAT_CLIENT_SECRET, WECHAT_AUTHORIZE_URL, WECHAT_TOKEN_URL, WECHAT_USER_INFO_URL
+
+# Set secret key
+app.secret_key = SECRET_KEY
+
+# Google OAuth registration
+if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
+    google = oauth.register(
+        name="google",
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        server_metadata_url=GOOGLE_DISCOVERY_URL,
+        client_kwargs={
+            "scope": "openid email profile"
+        },
+    )
+
+# WeChat OAuth registration
+if WECHAT_CLIENT_ID and WECHAT_CLIENT_SECRET:
+    wechat = oauth.register(
+        name="wechat",
+        client_id=WECHAT_CLIENT_ID,
+        client_secret=WECHAT_CLIENT_SECRET,
+        access_token_url=WECHAT_TOKEN_URL,
+        authorize_url=WECHAT_AUTHORIZE_URL,
+        api_base_url="https://api.weixin.qq.com/sns",
+        client_kwargs={
+            "scope": "snsapi_login"  # WeChat scope for login
+        },
+    )
+
+@login_manager.user_loader
+def load_user(user_id):
+    return get_user(user_id)
+
+# Initialize users table
+init_users_table()
 
 # Add error handling
 @app.errorhandler(HTTPException)
@@ -151,6 +201,182 @@ def readiness_check():
     return jsonify({'status': 'ready'}), 200
 
 # New endpoint to display visitor history
+@app.route('/login')
+def login():
+    """Show login options."""
+    return render_template('login.html')
+
+@app.route('/login/google')
+def login_google():
+    """Redirect to Google for authentication."""
+    if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
+        return "Google OAuth is not configured", 400
+
+    redirect_uri = request.url_root + 'callback/google'
+    return google.authorize_redirect(redirect_uri)
+
+@app.route('/callback/google')
+def google_callback():
+    """Handle the Google OAuth callback."""
+    try:
+        if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
+            return "Google OAuth is not configured", 400
+
+        token = google.authorize_access_token()
+        user_info = token.get("userinfo")
+
+        if user_info and user_info.get("email"):
+            user = get_user_by_email(user_info["email"])
+            if not user:
+                user = create_user(
+                    email=user_info["email"],
+                    name=user_info.get("name", user_info.get("email", "Unknown")),
+                    profile_pic=user_info.get("picture"),
+                    provider='google',
+                    provider_user_id=user_info.get('sub')  # Google's user ID
+                )
+            else:
+                # Update user info if it exists
+                import sqlite3
+                conn = sqlite3.connect('visitors.db')
+                cursor = conn.cursor()
+                cursor.execute("UPDATE users SET name=?, profile_pic=? WHERE email=?",
+                              (user_info.get("name", user_info.get("email", "Unknown")),
+                               user_info.get("picture"),
+                               user_info["email"]))
+                conn.commit()
+                conn.close()
+                # Update the user object with new info
+                user.name = user_info.get("name", user_info.get("email", "Unknown"))
+                user.profile_pic = user_info.get("picture")
+
+            login_user(user)
+            return redirect('/')
+
+        return "Authentication failed - no user info received.", 400
+    except Exception as e:
+        logger.error(f"Error during Google OAuth callback: {e}")
+        return "Authentication failed.", 400
+
+@app.route('/login/wechat')
+def login_wechat():
+    """Redirect to WeChat for authentication."""
+    if not (WECHAT_CLIENT_ID and WECHAT_CLIENT_SECRET):
+        return "WeChat OAuth is not configured", 400
+
+    import urllib.parse
+    redirect_uri = request.url_root + 'callback/wechat'
+    params = {
+        'appid': WECHAT_CLIENT_ID,
+        'redirect_uri': redirect_uri,
+        'response_type': 'code',
+        'scope': 'snsapi_login',
+        'state': 'wechat_auth'
+    }
+    url = f"{WECHAT_AUTHORIZE_URL}?" + urllib.parse.urlencode(params) + "#wechat_redirect"
+    return redirect(url)
+
+@app.route('/callback/wechat')
+def wechat_callback():
+    """Handle the WeChat OAuth callback."""
+    try:
+        if not (WECHAT_CLIENT_ID and WECHAT_CLIENT_SECRET):
+            return "WeChat OAuth is not configured", 400
+
+        # Get the authorization code from the callback
+        code = request.args.get('code')
+        if not code:
+            return "Authorization code not received.", 400
+
+        # Exchange the code for an access token
+        token_params = {
+            'appid': WECHAT_CLIENT_ID,
+            'secret': WECHAT_CLIENT_SECRET,
+            'code': code,
+            'grant_type': 'authorization_code'
+        }
+
+        token_response = requests.get(WECHAT_TOKEN_URL, params=token_params)
+        token_data = token_response.json()
+
+        if 'access_token' not in token_data:
+            logger.error(f"WeChat token exchange failed: {token_data}")
+            return "WeChat token exchange failed.", 400
+
+        access_token = token_data['access_token']
+        openid = token_data['openid']  # WeChat user ID
+
+        # Get user info using access token and openid
+        user_info_params = {
+            'access_token': access_token,
+            'openid': openid,
+            'lang': 'zh_CN'
+        }
+
+        user_info_response = requests.get(WECHAT_USER_INFO_URL, params=user_info_params)
+        user_info = user_info_response.json()
+
+        if 'nickname' not in user_info:
+            logger.error(f"WeChat user info retrieval failed: {user_info}")
+            return "WeChat user info retrieval failed.", 400
+
+        # Check if user already exists by provider and provider_user_id
+        user = get_user_by_provider('wechat', openid)
+        if not user:
+            # Create new user
+            user = create_user(
+                email=None,  # WeChat might not provide email
+                name=user_info.get('nickname', 'WeChat User'),
+                profile_pic=user_info.get('headimgurl', ''),
+                provider='wechat',
+                provider_user_id=openid
+            )
+        else:
+            # Update existing user info
+            import sqlite3
+            conn = sqlite3.connect('visitors.db')
+            cursor = conn.cursor()
+            cursor.execute("UPDATE users SET name=?, profile_pic=? WHERE provider=? AND provider_user_id=?",
+                          (user_info.get('nickname', 'WeChat User'),
+                           user_info.get('headimgurl', ''),
+                           'wechat',
+                           openid))
+            conn.commit()
+            conn.close()
+            # Update the user object with new info
+            user.name = user_info.get('nickname', 'WeChat User')
+            user.profile_pic = user_info.get('headimgurl', '')
+
+        login_user(user)
+        return redirect('/')
+    except Exception as e:
+        logger.error(f"Error during WeChat OAuth callback: {e}")
+        return "WeChat authentication failed.", 400
+
+@app.route('/logout')
+@login_required
+def logout():
+    """Logout the current user."""
+    logout_user()
+    return redirect('/')
+
+@app.route('/profile')
+@login_required
+def profile():
+    """Show user profile."""
+    html = f'''
+    <h1>用户资料</h1>
+    <div>
+        <p><strong>姓名:</strong> {current_user.name}</p>
+        <p><strong>邮箱:</strong> {current_user.email}</p>
+        <p><strong>提供商:</strong> {current_user.provider}</p>
+        <p><strong>头像:</strong> <img src="{current_user.profile_pic}" style="width: 100px; height: 100px; border-radius: 50%;"></p>
+    </div>
+    <br>
+    <a href="/">返回主页</a> | <a href="/logout">退出登录</a>
+    '''
+    return html
+
 @app.route('/visitors')
 def visitor_history():
     # Get the real IP address (considering proxies)
