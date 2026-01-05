@@ -39,7 +39,13 @@ def init_db():
 
 def save_visitor(ip_address, user_agent=None):
     """Save visitor information to the database."""
-    user_id = current_user.id if current_user.is_authenticated else None
+    # Check if we're in a Flask request context before accessing current_user
+    try:
+        user_id = current_user.id if current_user.is_authenticated else None
+    except RuntimeError:
+        # Not in a Flask request context, treat as guest
+        user_id = None
+
     with db_lock:
         conn = sqlite3.connect('visitors.db')
         cursor = conn.cursor()
