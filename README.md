@@ -56,7 +56,7 @@ https://github.com/coolshell2000/github-actions-test
 
 ## API端点
 
-- `GET /` - 主页（显示登录状态和用户信息）
+- `GET /` - 主页（显示登录状态、用户信息、位置和天气）
 - `GET /api/status` - API状态
 - `GET /health` - 健康检查
 - `GET /ready` - 就绪检查
