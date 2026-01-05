@@ -248,6 +248,7 @@ def home():
         <p>这是一个可部署的Flask应用示例。</p>
         <a href="/profile">个人资料</a> |
         <a href="/logout">退出登录</a> |
+        <a href="/rag">RAG求职应用</a> |
         <a href="/api/status">查看API状态</a> |
         <a href="/health">健康检查</a> |
         <a href="/visitors">访问者历史</a>
@@ -259,6 +260,7 @@ def home():
         <p>天气信息: {weather_info}</p>
         <p>这是一个可部署的Flask应用示例。</p>
         <a href="/login">登录</a> |
+        <a href="/rag">RAG求职应用</a> |
         <a href="/api/status">查看API状态</a> |
         <a href="/health">健康检查</a> |
         <a href="/visitors">访问者历史</a>
