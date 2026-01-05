@@ -169,14 +169,27 @@ def home():
     logger.info(f"Home page accessed by IP: {ip_address}")
     save_visitor(ip_address, user_agent)
 
-    return '''
-    <h1>欢迎来到TAOTAO应用!</h1>
-    <p>这是一个可部署的Flask应用示例。</p>
-    <a href="/login">登录</a> |
-    <a href="/api/status">查看API状态</a> |
-    <a href="/health">健康检查</a> |
-    <a href="/visitors">访问者历史</a>
-    '''
+    # Check if user is authenticated
+    if current_user.is_authenticated:
+        return f'''
+        <h1>欢迎来到TAOTAO应用!</h1>
+        <p>你好, {current_user.name}!</p>
+        <p>这是一个可部署的Flask应用示例。</p>
+        <a href="/profile">个人资料</a> |
+        <a href="/logout">退出登录</a> |
+        <a href="/api/status">查看API状态</a> |
+        <a href="/health">健康检查</a> |
+        <a href="/visitors">访问者历史</a>
+        '''
+    else:
+        return '''
+        <h1>欢迎来到TAOTAO应用!</h1>
+        <p>这是一个可部署的Flask应用示例。</p>
+        <a href="/login">登录</a> |
+        <a href="/api/status">查看API状态</a> |
+        <a href="/health">健康检查</a> |
+        <a href="/visitors">访问者历史</a>
+        '''
 
 @app.route('/api/status')
 def api_status():
