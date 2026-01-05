@@ -68,6 +68,10 @@ https://github.com/coolshell2000/github-actions-test
 - `GET /callback/wechat` - 微信OAuth回调
 - `GET /profile` - 用户资料（需登录）
 - `GET /logout` - 退出登录
+- `GET /rag` - RAG求职应用主页
+- `GET /rag/jobs` - RAG职位列表
+- `GET /rag/map` - RAG地图视图
+- `GET /rag/search` - RAG职位搜索
 
 ## 社交登录功能
 
