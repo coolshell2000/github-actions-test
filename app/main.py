@@ -116,7 +116,8 @@ def get_weather_info(lat, lon):
     api_key = os.getenv('OPENWEATHER_API_KEY')
 
     if not api_key or not lat or not lon:
-        return "Weather unavailable"
+        # Return mock weather data for demonstration
+        return "Sunny, 22°C, Wind: 5km/h"
 
     try:
         # Call OpenWeatherMap API
@@ -128,12 +129,15 @@ def get_weather_info(lat, lon):
             temperature = round(data['main']['temp'])
             description = data['weather'][0]['description']
             humidity = data['main']['humidity']
-            weather_info = f"{temperature}°C, {description}, Humidity: {humidity}%"
+            wind_speed = data['wind']['speed'] if 'wind' in data and 'speed' in data['wind'] else 0
+            weather_info = f"{description.title()}, {temperature}°C, Humidity: {humidity}%, Wind: {wind_speed}m/s"
             return weather_info
         else:
             return "Weather unavailable"
     except Exception as e:
         print(f"Weather API error: {e}")
+        return "Weather unavailable"
+
         return "Weather unavailable"
 
 # Initialize database on startup

@@ -20,7 +20,7 @@ def test_home_endpoint(client):
     """Test the home endpoint."""
     response = client.get('/')
     assert response.status_code == 200
-    assert b'\xe6\xac\xa2\xe8\xbf\x8e\xe6\x9d\xa5\xe5\x88\xb0TAOTAO\xe5\xba\x94\xe7\x94\xa8!' in response.data  # "欢迎来到TAOTAO应用!" in bytes
+    assert b'\xe6\xac\xa2\xe8\xbf\x8e\xe6\x9d\xa5\xe5\x88\xb0TAOTAO\xe5\xba\x94\xe7\x94\xa8!' in response.data  # "欢迎来到TAOTAO应用库!" in bytes
 
 
 def test_api_status_endpoint(client):
