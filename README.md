@@ -56,14 +56,16 @@ https://github.com/coolshell2000/github-actions-test
 
 ## API端点
 
-- `GET /` - 主页
+- `GET /` - 主页（显示登录状态和用户信息）
 - `GET /api/status` - API状态
 - `GET /health` - 健康检查
 - `GET /ready` - 就绪检查
-- `GET /visitors` - 访问者历史记录
+- `GET /visitors` - 访问者历史记录（含位置、反向DNS、天气信息）
 - `GET /login` - 社交登录页面
 - `GET /login/google` - Google登录
 - `GET /login/wechat` - 微信登录
+- `GET /callback/google` - Google OAuth回调
+- `GET /callback/wechat` - 微信OAuth回调
 - `GET /profile` - 用户资料（需登录）
 - `GET /logout` - 退出登录
 
