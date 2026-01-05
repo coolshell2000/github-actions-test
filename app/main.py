@@ -228,11 +228,19 @@ def home():
     logger.info(f"Home page accessed by IP: {ip_address}")
     save_visitor(ip_address, user_agent)
 
+    # Get location and weather info for the current visitor
+    location, reverse_dns, lat, lon = get_ip_location(ip_address)
+    weather_info = "Weather unavailable"
+    if lat and lon:
+        weather_info = get_weather_info(lat, lon)
+
     # Check if user is authenticated
     if current_user.is_authenticated:
         return f'''
         <h1>欢迎来到TAOTAO应用!</h1>
         <p>你好, {current_user.name}!</p>
+        <p>当前位置: {location}</p>
+        <p>天气信息: {weather_info}</p>
         <p>这是一个可部署的Flask应用示例。</p>
         <a href="/profile">个人资料</a> |
         <a href="/logout">退出登录</a> |
@@ -241,8 +249,10 @@ def home():
         <a href="/visitors">访问者历史</a>
         '''
     else:
-        return '''
+        return f'''
         <h1>欢迎来到TAOTAO应用!</h1>
+        <p>当前位置: {location}</p>
+        <p>天气信息: {weather_info}</p>
         <p>这是一个可部署的Flask应用示例。</p>
         <a href="/login">登录</a> |
         <a href="/api/status">查看API状态</a> |
